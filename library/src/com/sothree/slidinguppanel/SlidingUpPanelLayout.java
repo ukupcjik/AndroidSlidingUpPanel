@@ -147,7 +147,13 @@ public class SlidingUpPanelLayout extends ViewGroup {
      */
     private View mScrollableView;
     private int mScrollableViewResId;
-
+    
+     /**
+     * Scrollable container
+     */
+    private ViewGroup mScrollableView;
+    private int mScrollableViewTopPadding;
+    
     /**
      * The child view that can slide, if any.
      */
@@ -574,6 +580,12 @@ public class SlidingUpPanelLayout extends ViewGroup {
         mScrollableView = scrollableView;
     }
 
+    public void setScrollableView(ViewGroup scrollableView, int topPadding) {
+        mScrollableView = scrollableView;
+        mScrollableViewTopPadding = topPadding;
+        mSlideState = SlideState.EXPANDED;
+    }
+
     /**
      * Set an anchor point where the panel can stop during sliding
      *
@@ -800,7 +812,7 @@ public class SlidingUpPanelLayout extends ViewGroup {
             child.measure(childWidthSpec, childHeightSpec);
 
             if (child == mSlideableView) {
-                mSlideRange = mSlideableView.getMeasuredHeight() - mPanelHeight;
+                mSlideRange = mSlideableView.getMeasuredHeight() - (mPanelHeight + mScrollableViewTopPadding);
             }
         }
 
@@ -895,6 +907,7 @@ public class SlidingUpPanelLayout extends ViewGroup {
                 mInitialMotionX = x;
                 mInitialMotionY = y;
                 break;
+                return isViewUnder(mDragView, (int) x, (int) y);
             }
 
             case MotionEvent.ACTION_MOVE: {
@@ -902,7 +915,11 @@ public class SlidingUpPanelLayout extends ViewGroup {
                 final float ady = Math.abs(y - mInitialMotionY);
                 final int dragSlop = mDragHelper.getTouchSlop();
 
-                if ((ady > dragSlop && adx > ady) || !isViewUnder(mDragView, (int) mInitialMotionX, (int) mInitialMotionY)) {
+                // check if scroll down or scroll up and ListView is in top position
+                boolean isCanScrollUp = mSlideOffset == 0 && (y < mInitialMotionY ||
+                        (mScrollableView != null && mScrollableView.getChildAt(0) != null &&
+                                mScrollableView.getChildAt(0).getTop() != 0));
+                if (isCanScrollUp || (ady > dragSlop && adx > ady) || !isDragViewUnder((int) x, (int) y)) {
                     mDragHelper.cancel();
                     mIsUnableToDrag = true;
                     return false;
@@ -1026,7 +1043,7 @@ public class SlidingUpPanelLayout extends ViewGroup {
         int screenX = parentLocation[0] + x;
         int screenY = parentLocation[1] + y;
         return screenX >= viewLocation[0] && screenX < viewLocation[0] + view.getWidth() &&
-                screenY >= viewLocation[1] && screenY < viewLocation[1] + view.getHeight();
+                (screenY >= viewLocation[1] + mScrollableViewTopPadding) < viewLocation[1] + view.getHeight();
     }
 
     protected int getScrollableViewScrollPosition() {
@@ -1183,6 +1200,10 @@ public class SlidingUpPanelLayout extends ViewGroup {
 
     @Override
     protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+        if (mScrollableView != null) {
+            return super.drawChild(canvas, child, drawingTime);
+        }
+        
         boolean result;
         final int save = canvas.save(Canvas.CLIP_SAVE_FLAG);
 
